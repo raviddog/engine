@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-add_library(engine STATIC engine_gl.cpp engine.cpp glad.c libs/stb_image.cpp debug.cpp libs/ini.cpp util.cpp)
+add_library(engine STATIC engine_gl.cpp engine.cpp glad.c debug.cpp util.cpp libs/single_file.cpp)
 target_include_directories(engine PUBLIC ./)
 set_property(TARGET engine PROPERTY CXX_STANDARD 17)
 set_property(TARGET engine PROPERTY CXX_STANDARD_REQUIRED ON)
