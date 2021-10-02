@@ -68,19 +68,19 @@ bool collisionCrsq(float x1, float y1, float r1, float x2, float y2, float w2, f
             }
 
             //  check circle corners
-            if(((x1 - h[1]) * (x1 - h[1]) + (y1 - v[1]) * (y1 - v[1])) < r1^2) {
+            if(((x1 - h[1]) * (x1 - h[1]) + (y1 - v[1]) * (y1 - v[1])) < r1 * r1) {
                 return true;
             }
 
-            if(((x1 - h[2]) * (x1 - h[2]) + (y1 - v[1]) * (y1 - v[1])) < r1^2) {
+            if(((x1 - h[2]) * (x1 - h[2]) + (y1 - v[1]) * (y1 - v[1])) < r1 * r1) {
                 return true;
             }
 
-            if(((x1 - h[2]) * (x1 - h[2]) + (y1 - v[2]) * (y1 - v[2])) < r1^2) {
+            if(((x1 - h[2]) * (x1 - h[2]) + (y1 - v[2]) * (y1 - v[2])) < r1 * r1) {
                 return true;
             }
 
-            if(((x1 - h[1]) * (x1 - h[1]) + (y1 - v[2]) * (y1 - v[2])) < r1^2) {
+            if(((x1 - h[1]) * (x1 - h[1]) + (y1 - v[2]) * (y1 - v[2])) < r1 * r1) {
                 return true;
             }
 

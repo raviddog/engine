@@ -1,6 +1,7 @@
 //  execution unit for all single file header libraries
 
 #define ASSETSYS_IMPLEMENTATION
+#define STRPOOL_IMPLEMENTATION
 #include "assetsys.h"
 
 #define INI_IMPLEMENTATION
@@ -16,6 +17,3 @@
 #define STBI_NO_PNM 
 //  jpeg and png support only, rest unneeded
 #include "stb_image.h"
-
-#define STRPOOL_IMPLEMENTATION
-#include "strpool.h"

@@ -9,6 +9,7 @@ Included dependencies are:
   - ini.h
   - assetsys.h
 - glad
+- some OBJ loader that I found
 
 Externally linked dependencies are:
 - glfw
