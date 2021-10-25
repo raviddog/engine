@@ -174,15 +174,15 @@ namespace engine {
             gl::VBO *vbo;
             bool realloc;
 
-            void load(std::string path, int numSprites);
-            void load(std::string path, int numSprites, size_t maxDraws);
+            void load(const std::string &path, int numSprites);
+            void load(const std::string &path, int numSprites, size_t maxDraws);
         public:
         //  TODO this is here coz of font, seems wrong, clean up later
             gl::Texture *tex;
             int numSprites;
 
-            SpriteSheet(std::string path, int numSprites);
-            SpriteSheet(std::string path, int numSprites, size_t maxDraws);
+            SpriteSheet(const std::string &path, int numSprites);
+            SpriteSheet(const std::string &path, int numSprites, size_t maxDraws);
             ~SpriteSheet();
 
             void setSprite(int num, int x, int y, int width, int height);
@@ -261,8 +261,8 @@ namespace engine {
             Camera3D();
     };
 
-    Model* LoadModel(std::string&);
-    void UnloadModel(std::string&);
+    Model* LoadModel(const std::string&);
+    void UnloadModel(const std::string&);
     void UnloadModel(Model*);
 }
 

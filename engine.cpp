@@ -253,11 +253,11 @@ namespace engine {
             int count = 1;
             Model *model;
 
-            ManagedModel(std::string&);
+            ManagedModel(const std::string&);
             ~ManagedModel();
     };
 
-    ManagedModel::ManagedModel(std::string &path) {
+    ManagedModel::ManagedModel(const std::string &path) {
         model = new Model(path.c_str());
         count = 1;
     }
@@ -268,7 +268,7 @@ namespace engine {
 
     std::unordered_map<std::string, ManagedModel*> *loadedModels;
 
-    Model* LoadModel(std::string &path) {
+    Model* LoadModel(const std::string &path) {
         if(loadedModels->count(path)) {
             ManagedModel *tm = loadedModels->at(path);
             tm->count++;
@@ -280,7 +280,7 @@ namespace engine {
         }
     }
 
-    void UnloadModel(std::string &path) {
+    void UnloadModel(const std::string &path) {
         if(loadedModels->count(path)) {
             ManagedModel *tm = loadedModels->at(path);
             tm->count--;
@@ -464,11 +464,11 @@ namespace engine {
 
     //  [SPRITE]
 
-    SpriteSheet::SpriteSheet(std::string path, int numSprites) {
+    SpriteSheet::SpriteSheet(const std::string &path, int numSprites) {
         load(path, numSprites);
     }
 
-    SpriteSheet::SpriteSheet(std::string path, int numSprites, size_t maxDraws) {
+    SpriteSheet::SpriteSheet(const std::string &path, int numSprites, size_t maxDraws) {
         load(path, numSprites, maxDraws);
     }
 
@@ -481,7 +481,7 @@ namespace engine {
         delete sprites;
     }
 
-    void SpriteSheet::load(std::string path, int numSprites) {
+    void SpriteSheet::load(const std::string &path, int numSprites) {
         realloc = true;
 
         vao = new gl::VAO();
@@ -510,7 +510,7 @@ namespace engine {
         indices_stored_size = 0;
     }
 
-    void SpriteSheet::load(std::string path, int numSprites, size_t maxDraws) {
+    void SpriteSheet::load(const std::string &path, int numSprites, size_t maxDraws) {
         load(path, numSprites);
         vbo->bind();
         vbo->createBuffer(sizeof(float) * 28 * maxDraws, sizeof(uint32_t) * 6 * maxDraws);
@@ -713,11 +713,11 @@ namespace engine {
         
         glm::vec2 scrRes = glm::vec2((float)drawWidth, (float)drawHeight);
 
-        // shaderSpriteSheetInvert = new gl::Shader();
-        // shaderSpriteSheetInvert->load("/data/shaders/spritesheet.vert", "/data/shaders/spritesheet_invert.frag");
-        // shaderSpriteSheetInvert->use();
-        // shaderSpriteSheetInvert->setInt("txUnit", 0);
-        // shaderSpriteSheetInvert->setVec2("res", scrRes);
+        shaderSpriteSheetInvert = new gl::Shader();
+        shaderSpriteSheetInvert->load("./data/shaders/spritesheet.vert", "./data/shaders/spritesheet_invert.frag");
+        shaderSpriteSheetInvert->use();
+        shaderSpriteSheetInvert->setInt("txUnit", 0);
+        shaderSpriteSheetInvert->setVec2("res", scrRes);
 
         shaderSpriteSheet = new gl::Shader();
         shaderSpriteSheet->load("./data/shaders/spritesheet.vert", "./data/shaders/spritesheet.frag");
@@ -732,6 +732,10 @@ namespace engine {
         pshader->load("./data/shaders/test.vert", "./data/shaders/test.frag");
         pshader->use();
         pshader->setInt("screenTexture", 0);
+
+
+        currentDrawmode = DrawmodeUI;
+
     }
 
     void SetDrawmode(Drawmode dmode) {
@@ -742,11 +746,11 @@ namespace engine {
                     currentDrawmode = DrawmodeSprite;
                     glDisable(GL_DEPTH_TEST);
                     break;
-                // case DrawmodeSpriteInvert:
-                //     shaderSpriteSheetInvert->use();
-                //     currentDrawmode = DrawmodeSpriteInvert;
-                //     glDisable(GL_DEPTH_TEST);
-                //     break;
+                case DrawmodeSpriteInvert:
+                    shaderSpriteSheetInvert->use();
+                    currentDrawmode = DrawmodeSpriteInvert;
+                    glDisable(GL_DEPTH_TEST);
+                    break;
                 case Drawmode3D:
                     shader3d->use();
                     currentDrawmode = Drawmode3D;
