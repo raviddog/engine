@@ -5,14 +5,14 @@ Custom game engine that I'll be using for my game development endeavours. There'
 [https://trello.com/b/ojB1seUg/engine](https://trello.com/b/ojB1seUg/engine)
 
 Included dependencies are:
-- dear imgui
+- [dear imgui](https://github.com/ocornut/imgui)
 - a bunch of single header file libraries
-  - stb_image
-  - ini.h
-  - assetsys.h
-- glad
+  - [stb_image](https://github.com/nothings/stb)
+  - [ini.h](https://github.com/mattiasgustavsson/libs)
+  - [assetsys.h](https://github.com/mattiasgustavsson/libs)
+- [glad](https://glad.dav1d.de/)
 - some OBJ loader that I found
 
 Externally linked dependencies are:
-- glfw
+- [glfw](https://github.com/glfw/glfw)
 - opengl I think?
