@@ -46,17 +46,16 @@ namespace engine {
         };
     }
 
-    extern double mouseX, mouseY, mouseMoveX, mouseMoveY;
-    extern bool quit, loadFromZip;
+    extern bool loadFromZip;
     extern assetsys_t *assets;
-    extern int keyState[kb::KeycodesLength];
-    extern bool keyPressed[kb::KeycodesLength];
     extern void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
-    extern std::vector<GLFWgamepadstate*> *gamepads;
-    void GLinputs();
 
     namespace gl {
+        extern bool quit;
         extern GLFWwindow *window;
+        extern std::vector<GLFWgamepadstate*> *gamepads;
+        extern int keyState[kb::KeycodesLength];
+
         // extern SDL_GLContext maincontext;
         void init();
 
