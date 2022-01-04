@@ -2,12 +2,17 @@
 
 #include "debug.hpp"
 
+#include <GLFW/glfw3.h>
 #include <chrono>
+#include <cstring>
 #include <thread>
 #include <string>
 #include <fstream>
+#include <map>
 #include <unordered_map>
+#include <utility>
 
+#include "engine_gl.hpp"
 #include "libs/imgui/imgui.h"
 #include "libs/imgui/imgui_impl_glfw.h"
 #include "libs/imgui/imgui_impl_opengl3.h"
@@ -58,11 +63,44 @@ namespace engine {
     int aspect_w, aspect_h, winflags;
         
     double deltatime, last_frame;
-    
-    uint32_t controls[controlSize];
+
+    struct controlState {
+        float value;
+        bool state;
+        bool pressed;
+    } controls[controlSize];
+
+    struct controlMapping {
+        controlMapping(int j, bool a, int k) : joystick(j), axis(a), key(k) {}
+        controlMapping(int j, bool a, int k, bool ap) : joystick(j), axis(a), key(k), axis_positive(ap) {}
+        int joystick;
+        bool axis;
+        int key;
+        bool axis_positive;
+    };
+
+    std::multimap<int, controlMapping> *controlMaps;
+
+    //  defaults are for shmup, change later
+    struct joystick_t {
+        bool enabled = false;
+        bool lstick = true;
+        bool rstick = false;
+        bool dpad = true;
+        enum {
+            ENGINE_JOYSTICK_DEADZONE_CIRCLE,
+            ENGINE_JOYSTICK_DEADZONE_SQUARE,
+            ENGINE_JOYSTICK_DEADZONE_DIAMOND
+        } lstick_deadzone_type = ENGINE_JOYSTICK_DEADZONE_CIRCLE, rstick_deadzone_type = ENGINE_JOYSTICK_DEADZONE_CIRCLE;
+        float lstick_size = 0.3f, rstick_size = 0.3f;
+    } joystick_settings;
+
+    std::vector<GLFWgamepadstate*> *gamepads;
+
+    // std::vector<joystick_t> *joysticks = nullptr;
 
     //  framerate stuff
-    static bool _vsync, _fixeddrawsize = true;
+    static bool _vsync;
     uint32_t fps;
     double ticks, frameTimeTicks, avgTicksTotal;
     std::chrono::high_resolution_clock::time_point cur_time, next_time;
@@ -81,14 +119,12 @@ namespace engine {
     std::vector<std::pair<std::string, std::vector<imgui_t>*>> *imgui_windows = nullptr;
     
 
-
     gl::Shader *shaderSpriteSheet, *shaderSpriteSheetInvert, *shaderUI, *pshader, *shader3d;
 
     static Drawmode currentDrawmode;
 
     void windowMaximiseCallback(GLFWwindow*, int);
     void windowResizeCallback(GLFWwindow*, int, int);
-    void errorCallback(int, const char*);
 
     int gcd(int a, int b) {
         return b ? gcd(b, a % b) : a;
@@ -186,8 +222,8 @@ namespace engine {
         int w, h;
         Dimensions(text, &w, &h);
 
-        x -= w / 2;
-        y -= h / 2;
+        x -= w / 2.f;
+        y -= h / 2.f;
 
         int line = 0;
         int c = 0;
@@ -212,7 +248,7 @@ namespace engine {
                 line++;
                 c = 0;
             } else {
-                s->drawSprite((int)text.at(i), x + c * w, y + line * charinfo.h * (w / charinfo.w), 0.f, w, charinfo.h * (w / charinfo.w));
+                s->drawSprite((int)text.at(i), x + c * w, y + line * charinfo.h * ((float)w / charinfo.w), 0.f, w, charinfo.h * ((float)w / charinfo.w));
                 c++;
             }
         }
@@ -222,8 +258,8 @@ namespace engine {
         int wx, h;
         Dimensions(text, &wx, &h, &w);
 
-        x -= wx / 2;
-        y -= h / 2;
+        x -= wx / 2.f;
+        y -= h / 2.f;
 
         int line = 0;
         int c = 0;
@@ -233,7 +269,7 @@ namespace engine {
                 line++;
                 c = 0;
             } else {
-                s->drawSprite((int)text.at(i), x + c * w, y + line * charinfo.h * (w / charinfo.w), 0.f, w, charinfo.h * (w / charinfo.w));
+                s->drawSprite((int)text.at(i), x + c * w, y + line * charinfo.h * ((float)w / charinfo.w), 0.f, w, charinfo.h * ((float)w / charinfo.w));
                 c++;
             }
         }
@@ -478,7 +514,7 @@ namespace engine {
         delete vao;
         delete verts;
         delete indices;
-        delete sprites;
+        delete[] sprites;
     }
 
     void SpriteSheet::load(const std::string &path, int numSprites) {
@@ -870,41 +906,187 @@ namespace engine {
     bool init(const char *title, int flags, int width, int height, const char *settingsPath) {
         debug_init();
 
+        //  controls
+        controlMaps = new std::multimap<int, controlMapping>();
         //  default controls if there's none in config
-        controls[jump] = kb::Space;
+        //  there are no default controls, put a config file idiot
+        // controlMaps->insert(std::make_pair(inputUp, controlMapping(-1, false, kb::Up)));
+        // controlMaps->insert(std::make_pair(inputDown, controlMapping(-1, false, kb::Down)));
+        // controlMaps->insert(std::make_pair(inputLeft, controlMapping(-1, false, kb::Left)));
+        // controlMaps->insert(std::make_pair(inputRight, controlMapping(-1, false, kb::Right)));
+        // controlMaps->insert(std::make_pair(inputFire, controlMapping(-1, false, kb::Z)));
+        // controlMaps->insert(std::make_pair(inputFocus, controlMapping(-1, false, kb::LShift)));
+        // controlMaps->insert(std::make_pair(inputBomb, controlMapping(-1, false, kb::X)));
+        // controlMaps->insert(std::make_pair(inputPause, controlMapping(-1, false, kb::Escape)));
+        // controlMaps->insert(std::make_pair(inputQuit, controlMapping(-1, false, kb::Q)));
+        // controlMaps->insert(std::make_pair(inputRestart, controlMapping(-1, false, kb::R)));
+        // controlMaps->insert(std::make_pair(inputSkip, controlMapping(-1, false, kb::LControl)));
 
-        std::string inputStrings[] = {
-            "Jump"
+        const char *inputStrings[] = {
+            "up",
+            "down",
+            "left",
+            "right",
+            "fire",
+            "focus",
+            "bomb",
+            "pause",
+            "quit",
+            "restart",
+            "skip"
         };
 
-        std::ifstream file;
-        std::string settings;
         bool readstate = false;
+        const char *settings = nullptr;
 
-        try {
-            file.open(settingsPath);
-            std::stringstream filestream;
-            filestream << file.rdbuf();
-            file.close();
-            settings = filestream.str();
+        FILE *file;
+        file = fopen(settingsPath, "r");
+
+        if(file) {
+            fseek(file, 0L, SEEK_END);
+            long size = ftell(file);
+            fseek(file, 0L, SEEK_SET);
+            char *buffer = new char[size + 1];
+            fread(buffer, 1, size, file);
+            buffer[size] = '\0';
+            fclose(file);
+            settings = buffer;
             readstate = true;
-        } catch(std::ifstream::failure &ex) {
-            engine::log_debug("failed to open settings file, %s\n%s",  strerror(errno), ex.what());
-            file.close();
-            // return false;
+        } else {
+            log_debug("failed to open settings file %s\n", settingsPath);
             readstate = false;
+            fclose(file);
         }
+
         //  default settings
         //  really gotta put these somewhere else
         bool vsync = true;
+        int width_win = 640, height_win = 480;
 
 
         if(readstate) {
-            ini_t *ini = ini_load(settings.c_str(), NULL);
-            int vsync_i = ini_find_property(ini, INI_GLOBAL_SECTION, "vsync", 0);
-            std::string vsync_t = ini_property_value(ini, INI_GLOBAL_SECTION, vsync_i);
-            
-            vsync = vsync_t == "true";
+            ini_t *ini = ini_load(settings, NULL);
+            delete[] settings;
+
+            if(ini) {
+                int settings_i = ini_find_section(ini, "Settings", 8);
+                int vsync_i = ini_find_property(ini, settings_i, "vsync", 5);
+                if(vsync_i > -1) {
+                    vsync = std::strcmp(ini_property_value(ini, settings_i, vsync_i), "true") == 0 ? "true" : "false";
+                }
+                int width_win_i = ini_find_property(ini, settings_i, "width", 5);
+                if(width_win_i > -1) {
+                    width_win = std::strtol(ini_property_value(ini, settings_i, width_win_i), nullptr, 0);
+                }
+                int height_win_i = ini_find_property(ini, settings_i, "height", 6);
+                if(height_win_i > -1) {
+                    height_win = std::strtol(ini_property_value(ini, settings_i, height_win_i), nullptr, 0);
+                }
+
+
+                int keys_i = ini_find_section(ini, "Key", 3);
+                if(keys_i > -1) {
+                    int keys_count = ini_property_count(ini, keys_i);
+                    for(int i = 0; i < keys_count; i++) {
+                        const char *name = ini_property_name(ini, keys_i, i);
+                        for(int j = 0; j < controlSize; j++) {
+                            if(std::strcmp(name, inputStrings[j]) == 0) {
+                                int val = strtol(ini_property_value(ini, keys_i, i), nullptr, 0);
+                                if(val > 0) {
+                                    controlMaps->insert(std::make_pair(j, controlMapping(-1, false, val)));
+                                    log_debug("mapped %s to %d\n", name, val);
+                                }
+                                break;
+                            }
+                        } 
+
+                    }
+                }
+
+                int joystick_i = ini_find_section(ini, "Joystick", 8);
+                if(joystick_i > -1) {
+                    int enabled_i = ini_find_property(ini, joystick_i, "enabled", 7);
+                    if(enabled_i > -1) {
+                        joystick_settings.enabled = std::strcmp(ini_property_value(ini, joystick_i, enabled_i), "true") == 0;
+                    }
+
+                    int lstick_i = ini_find_property(ini, joystick_i, "lstick", 6);
+                    if(lstick_i > -1) {
+                        joystick_settings.lstick = std::strcmp(ini_property_value(ini, joystick_i, lstick_i), "true") == 0;
+
+                        //  insert stick mappings here?
+                        if(joystick_settings.lstick) {
+                            controlMaps->insert(std::make_pair(inputUp, controlMapping(0, true, GLFW_GAMEPAD_AXIS_LEFT_Y, false)));
+                            controlMaps->insert(std::make_pair(inputDown, controlMapping(0, true, GLFW_GAMEPAD_AXIS_LEFT_Y, true)));
+                            controlMaps->insert(std::make_pair(inputLeft, controlMapping(0, true, GLFW_GAMEPAD_AXIS_LEFT_X, false)));
+                            controlMaps->insert(std::make_pair(inputRight, controlMapping(0, true, GLFW_GAMEPAD_AXIS_LEFT_X, true)));
+                        }
+                    }
+
+                    int rstick_i = ini_find_property(ini, joystick_i, "rstick", 6);
+                    if(rstick_i > -1) {
+                        joystick_settings.rstick = std::strcmp(ini_property_value(ini, joystick_i, rstick_i), "true") == 0;
+                    }
+
+                    int dpad_i = ini_find_property(ini, joystick_i, "dpad", 4);
+                    if(dpad_i > -1) {
+                        joystick_settings.dpad = std::strcmp(ini_property_value(ini, joystick_i, dpad_i), "true") == 0;
+                    }
+
+                    int lstick_deadzone_i = ini_find_property(ini, joystick_i, "lstick_deadzone", 15);
+                    if(lstick_deadzone_i > -1) {
+                        const char *lstick_deadzone_v = ini_property_value(ini, joystick_i, lstick_deadzone_i);
+                        if(std::strcmp(lstick_deadzone_v, "circle") == 0) {
+                            joystick_settings.lstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_CIRCLE;
+                        } else if(std::strcmp(lstick_deadzone_v, "square") == 0) {
+                            joystick_settings.lstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_SQUARE;
+                        } else if(std::strcmp(lstick_deadzone_v, "diamond") == 0) {
+                            joystick_settings.lstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_DIAMOND;
+                        }
+                    }
+
+                    int rstick_deadzone_i = ini_find_property(ini, joystick_i, "rstick_deadzone", 15);
+                    if(rstick_deadzone_i > -1) {
+                        const char *rstick_deadzone_v = ini_property_value(ini, joystick_i, rstick_deadzone_i);
+                        if(std::strcmp(rstick_deadzone_v, "circle") == 0) {
+                            joystick_settings.rstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_CIRCLE;
+                        } else if(std::strcmp(rstick_deadzone_v, "square") == 0) {
+                            joystick_settings.rstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_SQUARE;
+                        } else if(std::strcmp(rstick_deadzone_v, "diamond") == 0) {
+                            joystick_settings.rstick_deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_DIAMOND;
+                        }
+                    }
+
+                    int lstick_size_i = ini_find_property(ini, joystick_i, "lstick_size", 11);
+                    if(lstick_size_i > -1) {
+                        joystick_settings.lstick_size = std::strtof(ini_property_value(ini, joystick_i, lstick_size_i), nullptr);
+                    }
+
+                    int rstick_size_i = ini_find_property(ini, joystick_i, "rstick_size", 11);
+                    if(rstick_size_i > -1) {
+                        joystick_settings.rstick_size = std::strtof(ini_property_value(ini, joystick_i, rstick_size_i), nullptr);
+                    }
+
+                    int joystick_keys_count = ini_property_count(ini, joystick_i);
+                    for(int i = 0; i < joystick_keys_count; i++) {
+                        const char *name = ini_property_name(ini, joystick_i, i);
+                        for(int j = 0; j < controlSize; j++) {
+                            if(std::strcmp(name, inputStrings[j]) == 0) {
+                                int val = strtol(ini_property_value(ini, joystick_i, i), nullptr, 0);
+                                if(val > -1) {
+                                    controlMaps->insert(std::make_pair(j, controlMapping(0, false, val)));
+                                    log_debug("mapped joystick %s to %d\n", name, val);
+                                }
+                                break;
+                            }
+                        } 
+                    }
+
+                    // joysticks = new std::vector<joystick_t>();
+                }
+
+                ini_destroy(ini);
+            }
         }
 
         //  else use defaults
@@ -914,7 +1096,7 @@ namespace engine {
         }
 
 
-        init(title, flags, width, height);
+        init(title, flags, width_win, height_win, width, height);
         return true;
     }
 
@@ -924,7 +1106,6 @@ namespace engine {
 
     //  2d init test
     void init(const char *title, int flags, int width, int height, int dwidth, int dheight) {
-        debug_init();
 
         /*
             flags contains a list of init flags
@@ -940,8 +1121,6 @@ namespace engine {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_RESIZABLE, flags & ENGINE_INIT_RESIZEABLE);
-
-        controls[jump] = kb::Space;
 
         for(int i = 0; i < kb::KeycodesLength; i++) {
             keyState[i] = 0;
@@ -987,10 +1166,8 @@ namespace engine {
 
         glfwMakeContextCurrent(gl::window);
         gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-        glfwSetKeyCallback(gl::window, key_callback);
         glfwSetWindowSizeCallback(gl::window, windowResizeCallback);
         glfwSetWindowMaximizeCallback(gl::window, windowMaximiseCallback);
-        glfwSetErrorCallback(errorCallback);
 
         aspect_w = drawWidth;
         aspect_h = drawHeight;
@@ -1060,6 +1237,95 @@ namespace engine {
 
         imgui_windows = new std::vector<std::pair<std::string, std::vector<imgui_t>*>>();
         #endif
+
+        //  gamepads
+        gamepads = new std::vector<GLFWgamepadstate*>();
+        for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
+            if(glfwJoystickPresent(i)) {
+                if(glfwJoystickIsGamepad(i)) {
+                    gamepads->push_back(new GLFWgamepadstate);
+                    log_debug("Gamepad %d detected\n", i);
+                } else {
+                    gamepads->push_back(nullptr);
+                    log_debug("Gamepad %d detected but no mapping available, Name: %s | GUID: %s\n", i, glfwGetJoystickName(i), glfwGetJoystickGUID(i));
+                }
+            } else {
+                gamepads->push_back(nullptr);
+            }
+        }
+
+        //  clean up later
+        gl::init();
+    }
+
+    void inputs() {
+        GLinputs();
+        //  calculate all thingies
+        //  TODO add deadzone calculations here
+        for(int i = 0; i < controlSize; i++) {
+            //  TODO check for each control for multiple input overrides
+            bool updated = false;
+            for(auto range = controlMaps->equal_range(i); range.first != range.second; range.first++) {
+                controlMapping map = range.first->second;
+                if(map.joystick > -1) {
+                    if(joystick_settings.enabled) {
+                        //  skip entire section if joystick is disabled
+                        if(map.axis) {
+                            //  is axis
+                            if(map.key <= GLFW_GAMEPAD_AXIS_LAST) {
+                                //  get joystick
+                                if(gamepads->at(map.joystick)) {
+                                    controls[i].value = gamepads->at(map.joystick)->axes[map.key];
+                                    //  axis to button test
+                                    //  temp with hardcoded deadzone
+                                    if(map.axis_positive) {
+                                        if(controls[i].value > 0.3f) {
+                                            controls[i].state = true;
+                                            controls[i].pressed = true;
+                                        } else {
+                                            controls[i].state = false;
+                                            controls[i].pressed = false;
+                                        }
+                                    } else {
+                                        if(controls[i].value < -0.3f) {
+                                            controls[i].state = true;
+                                            controls[i].pressed = true;
+                                        } else {
+                                            controls[i].state = false;
+                                            controls[i].pressed = false;
+                                        }
+                                    }
+
+
+                                    //  actual implenentation here
+                                    // switch(map.key) {
+                                        //  switch for axes to check correct deadzone setting
+                                    // }
+                                }
+                                //  else joystick unplugged
+                            }
+                        } else {
+                            //  is button
+                            if(map.key <= GLFW_GAMEPAD_BUTTON_LAST) {
+                                if(gamepads->at(map.joystick)) {
+                                    controls[i].state = gamepads->at(map.joystick)->buttons[map.key];
+                                    controls[i].pressed = gamepads->at(map.joystick)->buttons[map.key]; // TODO fix later
+                                    //  button to axis test
+                                    controls[i].value = controls[i].state ? 1.f : 0.f;
+                                }
+                                //  else joystick unplugged
+                            }
+                        }
+                    }
+                } else {
+                    controls[i].state = keyState[map.key];
+                    controls[i].pressed = keyPressed[map.key];  //  need to reimplement this too later
+                    if(controls[i].state) {
+                        controls[i].value = 1.f;
+                    }
+                }
+            }
+        }
     }
 
     void windowMaximiseCallback(GLFWwindow *window, int m) {
@@ -1146,20 +1412,99 @@ namespace engine {
     //  [FLIP]
 
     void flip() {       
+        #ifndef IMGUI_DISABLE
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-        using namespace std::chrono;
+        for(size_t i = 0; i < imgui_windows->size(); i++) {
+            ImGui::Begin(imgui_windows->at(i).first.c_str());
+            for(size_t j = 0; j < imgui_windows->at(i).second->size(); j++) {
+                imgui_t temp = imgui_windows->at(i).second->at(j);
+                if(temp.type == 1) {
+                    //  float
+                    ImGui::Text("%s", temp.text.c_str());
+                    ImGui::SameLine();
+                    if(temp.edit) {
+                        ImGui::InputFloat("##value", (float*)temp.value, 1.0f);
+                    } else {
+                        ImGui::Text("%f", *(float*)temp.value);
+                    }
+                } else if(temp.type == 2) {
+                    //  int
+                    ImGui::Text("%s", temp.text.c_str());
+                    ImGui::SameLine();
+                    if(temp.edit) {
+                        ImGui::InputInt("##value", (int*)temp.value, 1.0f);
+                    } else {
+                        ImGui::Text("%d", *(int*)temp.value);
+                    }
+                } else if(temp.type == 3) {
+                    //  bool
+                    ImGui::Text("%s", temp.text.c_str());
+                    ImGui::SameLine();
+                    if(*(bool*)temp.value) {
+                        ImGui::Text(" True");
+                    } else {
+                        ImGui::Text(" False");
+                    }
+                } else if(temp.type == 4) {
+                    //  double
+                    ImGui::Text("%s", temp.text.c_str());
+                    ImGui::SameLine();
+                    if(temp.edit) {
+                        ImGui::InputDouble("##value", (double*)temp.value, 1.0f);
+                    } else {
+                        ImGui::Text("%f", *(double*)temp.value);
+                    }
+                }
+            }
+            ImGui::End();
+        }
+
         #ifdef _MSG_DEBUG_ENABLED_FPS
-        uint32_t slept;
+        static std::stringstream d;
+        double temp_ticks = glfwGetTime();
+        avgTicksTotal += temp_ticks - frameTimeTicks;
+        if(temp_ticks > ticks + 1.0) {
+            d.str("");
+            d << "Avg Frame time: " << avgTicksTotal / fps << "ms | ";
+            d << "FPS: " << fps << " | Avg FPS: " << 1. / (avgTicksTotal / fps) << " | Deltatime: " << deltatime;
+            // glfwSetWindowTitle(gl::window, d.str().c_str());
+            fps = 0u;
+            ticks = temp_ticks;
+            avgTicksTotal = 0.;
+        }
+        frameTimeTicks = temp_ticks;
+        ++fps;
+
+        ImGui::Begin("Performance");
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("%s", d.str().c_str());
+        ImGui::End();
         #endif
-        //  if vsync disabled, cap fps
-        int temp = 0;
+
+        ImGui::Render();
+        setViewport();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        #endif
+
+        //  flip buffers
+        glfwSwapBuffers(gl::window);
+
+        //  clear new buffer
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        //  update deltatime
+        deltatime = glfwGetTime() - last_frame;
+        last_frame = glfwGetTime();
+
+        //  if not vsync, wait for next frame
+        using namespace std::chrono;
         if(!_vsync) {
-            //  wait
-            #ifdef _MSG_DEBUG_ENABLED_FPS
-            high_resolution_clock::time_point sleep = high_resolution_clock::now();
-            #endif
             #ifdef __GNUG__
-            next_time += microseconds(_ENGINE_NOVSYNC_DELAY_MICROSECONDS);
+            next_time = high_resolution_clock::now() + microseconds(_ENGINE_NOVSYNC_DELAY_MICROSECONDS);
             timespec delayt, delayr;
             nanoseconds delaym = duration_cast<nanoseconds>(next_time - high_resolution_clock::now());
             delayt.tv_sec = 0;
@@ -1173,115 +1518,12 @@ namespace engine {
             std::this_thread::sleep_until(next_time);
             #endif
 
-            #ifdef _MSG_DEBUG_ENABLED_FPS
-            slept = duration_cast<milliseconds>(high_resolution_clock::now() - sleep).count();
-            #endif
-
             // auto wake_time = steady_clock::now();
-            while(high_resolution_clock::now() < next_time) {
-                //  spin
-                temp++;
-            }
+            // while(high_resolution_clock::now() < next_time) {
+            //     //  spin
+            //     temp++;
+            // }
         }
-
-        #ifdef _MSG_DEBUG_ENABLED_FPS
-        //  print debug fps data
-            
-        static std::stringstream d;
-        
-        #ifndef IMGUI_DISABLE
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        for(size_t i = 0; i < imgui_windows->size(); i++) {
-            ImGui::Begin(imgui_windows->at(i).first.c_str());
-            for(size_t j = 0; j < imgui_windows->at(i).second->size(); j++) {
-                imgui_t temp = imgui_windows->at(i).second->at(j);
-                if(temp.type == 1) {
-                    //  float
-                    ImGui::Text(temp.text.c_str());
-                    ImGui::SameLine();
-                    if(temp.edit) {
-                        ImGui::InputFloat("##value", (float*)temp.value, 1.0f);
-                    } else {
-                        ImGui::Text("%f", *(float*)temp.value);
-                    }
-                } else if(temp.type == 2) {
-                    //  int
-                    ImGui::Text(temp.text.c_str());
-                    ImGui::SameLine();
-                    if(temp.edit) {
-                        ImGui::InputInt("##value", (int*)temp.value, 1.0f);
-                    } else {
-                        ImGui::Text("%d", *(int*)temp.value);
-                    }
-                } else if(temp.type == 3) {
-                    //  bool
-                    ImGui::Text(temp.text.c_str());
-                    ImGui::SameLine();
-                    if(*(bool*)temp.value) {
-                        ImGui::Text(" True");
-                    } else {
-                        ImGui::Text(" False");
-                    }
-                } else if(temp.type == 4) {
-                    //  double
-                    ImGui::Text(temp.text.c_str());
-                    ImGui::SameLine();
-                    if(temp.edit) {
-                        ImGui::InputDouble("##value", (double*)temp.value, 1.0f);
-                    } else {
-                        ImGui::Text("%f", *(double*)temp.value);
-                    }
-                }
-            }
-            ImGui::End();
-        }
-
-        ImGui::Begin("Performance");
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::Text(d.str().c_str());
-        ImGui::End();
-
-        ImGui::Render();
-        setViewport();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        #endif
-
-        double temp_ticks = glfwGetTime();
-        avgTicksTotal += temp_ticks - frameTimeTicks;
-        if(temp_ticks > ticks + 1.0) {
-            d.str("");
-            d << "Avg Frame time: " << avgTicksTotal / fps << "ms | ";
-            d << "FPS: " << fps << " | Avg FPS: " << 1. / (avgTicksTotal / fps) << " | Deltatime: " << deltatime;
-            if(!_vsync) {
-                d << " | Slept: " << slept << "ms | ";
-                d << "Spun: " << temp;
-            }
-            // glfwSetWindowTitle(gl::window, d.str().c_str());
-            fps = 0u;
-            ticks = temp_ticks;
-            temp = 0u;
-            avgTicksTotal = 0.;
-        }
-        frameTimeTicks = temp_ticks;
-        ++fps;
-        #endif
-
-
-
-
-        //  update deltatime
-        deltatime = glfwGetTime() - last_frame;
-        last_frame = glfwGetTime();
-
-        //  flip buffers
-        glfwSwapBuffers(gl::window);
-
-        //  clear new buffer
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    
     }
 
@@ -1324,11 +1566,22 @@ namespace engine {
     }
 
     bool checkKey(int key) {
-        return keyState[controls[key]] == GLFW_PRESS || keyState[controls[key]] == GLFW_REPEAT;
+        if(controls[key].state) return true;
+
+        
+
+        return false;
     }
 
     bool checkKeyPressed(int key) {
-        return keyPressed[controls[key]];
+        if(controls[key].pressed) return true;
+        
+        return false;
+    }
+
+    float checkKeyAxis(int key) {
+        return controls[key].value;
+
     }
 
     void mouseCapture() {
@@ -1342,9 +1595,7 @@ namespace engine {
         glfwSetInputMode(gl::window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 
-    void errorCallback(int error, const char *description) {
-        log_debug("Error %d: %s\n", error, description);
-    }
+    
 
     //  [IMGUI]
 
@@ -1473,6 +1724,23 @@ namespace engine {
         std::vector<imgui_t> *v = new std::vector<imgui_t>();
         std::pair<std::string, std::vector<imgui_t>*> t = std::make_pair(text, v);
         imgui_windows->push_back(t);
+        #endif
+    }
+
+    void removeDebugWindow(std::string text) {
+        #ifndef INGUI_DISABLE
+        if(imgui_windows) {
+            for(auto i = imgui_windows->begin(); i != imgui_windows->end(); i++) {
+                auto win = i->first;
+                if(text == win) {
+                    delete i->second;
+                    i = imgui_windows->erase(i);
+                    break;
+                }
+            }
+        }
+
+
         #endif
     }
 }

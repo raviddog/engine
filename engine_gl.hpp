@@ -52,11 +52,13 @@ namespace engine {
     extern int keyState[kb::KeycodesLength];
     extern bool keyPressed[kb::KeycodesLength];
     extern void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
-    void inputs();
+    extern std::vector<GLFWgamepadstate*> *gamepads;
+    void GLinputs();
 
     namespace gl {
         extern GLFWwindow *window;
         // extern SDL_GLContext maincontext;
+        void init();
 
         struct modelVertex {
             glm::vec3 Position;

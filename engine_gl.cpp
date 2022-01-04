@@ -1,6 +1,7 @@
 #include "engine_gl.hpp"
 
 #include "debug.hpp"
+#include <GLFW/glfw3.h>
 
 namespace engine {
     double mouseX, mouseY, mouseXold = 0.0, mouseYold = 0.0, mouseMoveX, mouseMoveY;
@@ -10,8 +11,10 @@ namespace engine {
     int keyStateTest[kb::KeycodesLength];
 
     void *currentShader = nullptr;
+
     
-    void inputs() {        
+    
+    void GLinputs() {        
         if(glfwWindowShouldClose(gl::window)) {
             quit = true;
         }
@@ -31,13 +34,77 @@ namespace engine {
             }
             keyStateTest[i] = keyState[i];
         }
+
+        if(gamepads) {
+            for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
+                if(gamepads->at(i) != nullptr) {
+                    glfwGetGamepadState(i, gamepads->at(i));
+                }
+            }
+        } else {
+            //  reinit gamepads, same code as engine
+            gamepads = new std::vector<GLFWgamepadstate*>();
+            for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
+                if(glfwJoystickPresent(i)) {
+                    if(glfwJoystickIsGamepad(i)) {
+                        gamepads->push_back(new GLFWgamepadstate);
+                        log_debug("Gamepad %d detected\n", i);
+                    } else {
+                        gamepads->push_back(nullptr);
+                        log_debug("Gamepad %d detected but no mapping available, Name: %s | GUID: %s\n", i, glfwGetJoystickName(i), glfwGetJoystickGUID(i));
+                    }
+                } else {
+                    gamepads->push_back(nullptr);
+                }
+            }
+        }
     }
 
     void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
         keyState[key] = action;
     }
 
+    void errorCallback(int error, const char *description) {
+        log_debug("Error %d: %s\n", error, description);
+    }
+
+    void joystickCallback(int jid, int event) {
+        if(event == GLFW_CONNECTED) {
+            if(glfwJoystickPresent(jid)) {
+                if(glfwJoystickIsGamepad(jid)) {
+                    if(gamepads->at(jid) == nullptr) {
+                        gamepads->at(jid) = new GLFWgamepadstate;
+                        log_debug("Gamepad %d connected\n", jid);
+                    }
+                    //  else you plugged in an already plugged in gamepad
+                } else {
+                    delete gamepads->at(jid);
+                    gamepads->at(jid) = nullptr;
+                    log_debug("Gamepad %d connected but no mapping available, Name: %s | GUID: %s\n", jid, glfwGetJoystickName(jid), glfwGetJoystickGUID(jid));
+                }
+            } else {
+                gamepads->push_back(nullptr);
+            }
+        } else if(event == GLFW_DISCONNECTED) {
+            if(gamepads->at(jid) != nullptr) {
+                delete gamepads->at(jid);
+                gamepads->at(jid) = nullptr;
+            }
+            log_debug("Gamepad %d disconnected\n", jid);
+        }
+    }
+
     namespace gl {
+
+        void init() {
+            //  gl init
+            //  mostly setting callbacks and stuff
+
+            glfwSetErrorCallback(errorCallback);
+            glfwSetKeyCallback(window, key_callback);
+            glfwSetJoystickCallback(joystickCallback);
+        }
+
         GLFWwindow *window;
         // SDL_GLContext maincontext;
 

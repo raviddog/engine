@@ -13,7 +13,9 @@ namespace engine {
 
     //  set game controls here
     enum inputKeys {
-        jump,
+        inputUp, inputDown, inputLeft, inputRight,
+        inputFire, inputFocus, inputBomb, inputPause,
+        inputQuit, inputRestart, inputSkip,
 
 
 
@@ -45,6 +47,7 @@ namespace engine {
 
     bool checkKey(int key);
     bool checkKeyPressed(int key);
+    float checkKeyAxis(int key);
 
     bool init(const char *title, int flags, int width, int height, const char *settingsPath);
     void init(const char *title, int flags, int width, int height);
@@ -71,6 +74,8 @@ namespace engine {
     void registerDebugVariable(std::string, bool*, bool, size_t);
     void registerDebugVariable(std::string, double*, bool);
     void registerDebugVariable(std::string, double*, bool, size_t);
+
+    void removeDebugWindow(std::string);
 
     // void InitialiseDrawmodes();
     void SetDrawmode(Drawmode dmode);
