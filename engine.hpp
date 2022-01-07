@@ -20,17 +20,7 @@ namespace engine {
         Drawmode3D
     };
 
-    enum EngineInitFlags {
-        ENGINE_INIT_VSYNC = 1 << 0,
-        ENGINE_INIT_RESIZEABLE = 1 << 1,
-        ENGINE_INIT_FIXEDASPECT = 1 << 2,
-        ENGINE_INIT_TRUEFULLSCREEN = 1 << 3,
-        ENGINE_INIT_BORDERLESS = 1 << 4,
-        ENGINE_INIT_FIXEDFPS = 1 << 5,
-        ENGINE_INIT_FIXEDDRAWSIZE = 1 << 6
-
-
-    };
+    
 
     extern gl::Shader *shaderSpriteSheet, *shaderSpriteSheetInvert, *shaderUI, *pshader, *shader3d;
 
