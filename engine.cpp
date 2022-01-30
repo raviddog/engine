@@ -1099,7 +1099,7 @@ namespace engine {
     }
 
     void close() {
-        assetsys_dismount(assets, "data.zip", "/data");
+        if(loadFromZip) assetsys_dismount(assets, "data.zip", "/data");
         #ifndef IMGUI_DISABLE
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
