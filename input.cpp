@@ -7,6 +7,8 @@
 #include <map>
 #include <cstring>
 
+#define JOYSTICK_ALLENABLED true
+
 namespace engine {
 
     double mouseX, mouseY, mouseXold = 0.0, mouseYold = 0.0, mouseMoveX, mouseMoveY;
@@ -219,27 +221,9 @@ namespace engine {
             keyStateTest[i] = gl::keyState[i];
         }
 
-        if(gl::gamepads) {
-            for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
-                if(gl::gamepads->at(i) != nullptr) {
-                    glfwGetGamepadState(i, gl::gamepads->at(i));
-                }
-            }
-        } else {
-            //  reinit gl::gamepads, same code as engine
-            gl::gamepads = new std::vector<GLFWgamepadstate*>();
-            for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
-                if(glfwJoystickPresent(i)) {
-                    if(glfwJoystickIsGamepad(i)) {
-                        gl::gamepads->push_back(new GLFWgamepadstate);
-                        log_debug("Gamepad %d detected\n", i);
-                    } else {
-                        gl::gamepads->push_back(nullptr);
-                        log_debug("Gamepad %d detected but no mapping available, Name: %s | GUID: %s\n", i, glfwGetJoystickName(i), glfwGetJoystickGUID(i));
-                    }
-                } else {
-                    gl::gamepads->push_back(nullptr);
-                }
+        for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
+            if(gl::gamepads->at(i) != nullptr) {
+                glfwGetGamepadState(i, gl::gamepads->at(i));
             }
         }
 
@@ -251,7 +235,6 @@ namespace engine {
             controls[i].state = false;
             controls[i].pressed = false;
 
-            //  TODO check for each control for multiple input overrides
             for(auto range = controlMaps->equal_range(i); range.first != range.second; range.first++) {
                 controlMapping map = range.first->second;
                 if(map.joystick > -1) {
@@ -261,66 +244,170 @@ namespace engine {
                             //  is axis
                             if(map.key <= GLFW_GAMEPAD_AXIS_LAST) {
                                 //  get joystick
-                                if(gl::gamepads->at(map.joystick)) {
-                                    float tempvalue = gl::gamepads->at(map.joystick)->axes[map.key];
-                                    //  do a deadzone check to see if we need to overwrite a button press
-                                    float deadzone = 0.3f;
-                                    
+                                if(JOYSTICK_ALLENABLED) {
+                                    //  single player game, take input from any joystick
+                                    for(auto i = GLFW_JOYSTICK_1; i <= GLFW_JOYSTICK_LAST; i++) {
+                                        if(gl::gamepads->at(i)) {
+                                            float tempvalue = gl::gamepads->at(i)->axes[map.key];
+                                            //  do a deadzone check to see if we need to overwrite a button press
+                                            float deadzone = 0.3f;
+                                            int deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_CIRCLE;
 
-                                    //  only update the value if its larger
-                                    if(tempvalue > 0.3f) {
-                                        if(controls[i].value < tempvalue); {
-                                            controls[i].value = tempvalue;
+                                            switch(map.key) {
+                                                case GLFW_GAMEPAD_AXIS_LEFT_X:
+                                                    deadzone = joystick_settings.lstick_size_x;
+                                                    deadzone_type = joystick_settings.lstick_deadzone_type;
+                                                    break;
+                                                case GLFW_GAMEPAD_AXIS_LEFT_Y:
+                                                    deadzone = joystick_settings.lstick_size_y;
+                                                    deadzone_type = joystick_settings.lstick_deadzone_type;
+                                                    break;
+                                                case GLFW_GAMEPAD_AXIS_RIGHT_X:
+                                                    deadzone = joystick_settings.rstick_size_x;
+                                                    deadzone_type = joystick_settings.rstick_deadzone_type;
+                                                    break;
+                                                case GLFW_GAMEPAD_AXIS_RIGHT_Y:
+                                                    deadzone = joystick_settings.rstick_size_y;
+                                                    deadzone_type = joystick_settings.rstick_deadzone_type;
+                                                    break;
+                                                default:
+                                                    break;
+                                            }
+
+                                            if(deadzone_type == joystick_t::ENGINE_JOYSTICK_DEADZONE_CIRCLE) {
+                                                
+                                            } else if(deadzone_type == joystick_t::ENGINE_JOYSTICK_DEADZONE_DIAMOND) {
+
+                                            }
+                                            
+
+                                            //  only update the value if its larger
+                                            if(tempvalue > deadzone) {
+                                                if(controls[i].value < tempvalue); {
+                                                    controls[i].value = tempvalue;
+                                                }
+                                            } else if(tempvalue < -deadzone) {
+                                                if(controls[i].value > tempvalue) {
+                                                    controls[i].value = tempvalue;
+                                                }
+                                            } else {
+                                                // dont set this
+                                                // controls[i].value = 0.f;
+                                            }
+                                            
+
+                                            //  axis to button test
+                                            //  only set things to true, dont set things to false
+                                            if(map.axis_positive) {
+                                                if(controls[i].value > deadzone) {
+                                                    controls[i].state = true;
+                                                }
+                                            } else {
+                                                if(controls[i].value < -deadzone) {
+                                                    controls[i].state = true;
+                                                }
+                                            }
                                         }
-                                    } else if(tempvalue < -0.3f) {
-                                        if(controls[i].value > tempvalue) {
-                                            controls[i].value = tempvalue;
-                                        }
-                                    } else {
-                                        controls[i].value = 0.f;
+
                                     }
-                                    
+                                } else {
+                                    if(gl::gamepads->at(map.joystick)) {
+                                        float tempvalue = gl::gamepads->at(map.joystick)->axes[map.key];
+                                        //  do a deadzone check to see if we need to overwrite a button press
+                                        float deadzone = 0.3f;
+                                        int deadzone_type = joystick_t::ENGINE_JOYSTICK_DEADZONE_CIRCLE;
 
-                                    //  axis to button test
-                                    //  temp with hardcoded deadzone
-                                    //  only set things to true, dont set things to false
-                                    if(map.axis_positive) {
-                                        if(controls[i].value > 0.3f) {
-                                            controls[i].state = true;
+                                        switch(map.key) {
+                                            case GLFW_GAMEPAD_AXIS_LEFT_X:
+                                                deadzone = joystick_settings.lstick_size_x;
+                                                deadzone_type = joystick_settings.lstick_deadzone_type;
+                                                break;
+                                            case GLFW_GAMEPAD_AXIS_LEFT_Y:
+                                                deadzone = joystick_settings.lstick_size_y;
+                                                deadzone_type = joystick_settings.lstick_deadzone_type;
+                                                break;
+                                            case GLFW_GAMEPAD_AXIS_RIGHT_X:
+                                                deadzone = joystick_settings.rstick_size_x;
+                                                deadzone_type = joystick_settings.rstick_deadzone_type;
+                                                break;
+                                            case GLFW_GAMEPAD_AXIS_RIGHT_Y:
+                                                deadzone = joystick_settings.rstick_size_y;
+                                                deadzone_type = joystick_settings.rstick_deadzone_type;
+                                                break;
+                                            default:
+                                                break;
                                         }
-                                    } else {
-                                        if(controls[i].value < -0.3f) {
-                                            controls[i].state = true;
+
+                                        //  only update the value if its larger
+                                        if(tempvalue > deadzone) {
+                                            if(controls[i].value < tempvalue); {
+                                                controls[i].value = tempvalue;
+                                            }
+                                        } else if(tempvalue < -deadzone) {
+                                            if(controls[i].value > tempvalue) {
+                                                controls[i].value = tempvalue;
+                                            }
+                                        } else {
+                                            //  dont set this
+                                            // controls[i].value = 0.f;
+                                        }
+                                        
+
+                                        //  axis to button test
+                                        //  only set things to true, dont set things to false
+                                        if(map.axis_positive) {
+                                            if(controls[i].value > deadzone) {
+                                                controls[i].state = true;
+                                            }
+                                        } else {
+                                            if(controls[i].value < -deadzone) {
+                                                controls[i].state = true;
+                                            }
                                         }
                                     }
-
-                                    //  actual implenentation here
-                                    // switch(map.key) {
-                                        //  switch for axes to check correct deadzone setting
-                                    // }
-
                                 }
                                 //  else joystick unplugged
                             }
                         } else {
                             //  is button
                             if(map.key <= GLFW_GAMEPAD_BUTTON_LAST) {
-                                if(gl::gamepads->at(map.joystick)) {
-                                    bool tempstate = gl::gamepads->at(map.joystick)->buttons[map.key];
-                                    if(!tempstate) {
-                                        //  only set to false if its already false
-                                        //  aka do jack shit
-                                    } else {
-                                        controls[i].state = true;
-                                        //  if there isnt an existing analog value, set it to full
-                                        if(controls[i].value < 0.3f && controls[i].value > -0.3f) {
-                                            controls[i].value = controls[i].state ? 1.f : 0.f;
+                                if(JOYSTICK_ALLENABLED) {
+                                    for(auto i = GLFW_JOYSTICK_1; i < GLFW_JOYSTICK_LAST; i++) {
+                                        if(gl::gamepads->at(i)) {
+                                            bool tempstate = gl::gamepads->at(i)->buttons[map.key];
+                                            if(!tempstate) {
+                                                //  only set to false if its already false
+                                                //  aka do jack shit
+                                            } else {
+                                                controls[i].state = true;
+                                                //  if there isnt an existing analog value, set it to full
+                                                if(controls[i].value < 0.3f && controls[i].value > -0.3f) {
+                                                    controls[i].value = controls[i].state ? 1.f : 0.f;
+                                                }
+                                            }
+                                            //  button to axis test
+                                            
                                         }
+                                        //  else joystick unplugged
                                     }
-                                    //  button to axis test
-                                    
+                                } else {
+                                    if(gl::gamepads->at(map.joystick)) {
+                                        bool tempstate = gl::gamepads->at(map.joystick)->buttons[map.key];
+                                        if(!tempstate) {
+                                            //  only set to false if its already false
+                                            //  aka do jack shit
+                                        } else {
+                                            controls[i].state = true;
+                                            //  if there isnt an existing analog value, set it to full
+                                            if(controls[i].value < 0.3f && controls[i].value > -0.3f) {
+                                                controls[i].value = controls[i].state ? 1.f : 0.f;
+                                            }
+                                        }
+                                        //  button to axis test
+                                        
+                                    }
+                                    //  else joystick unplugged
                                 }
-                                //  else joystick unplugged
                             }
                         }
                     }
@@ -330,6 +417,7 @@ namespace engine {
                         controls[i].state = true;
                         if(controls[i].value == 0.f) {
                             //  if there isnt a stick input, overwrite it
+                            //  i guess keypresses overwrite analog inputs?
                             controls[i].value = 1.f;
                         }
                     }
